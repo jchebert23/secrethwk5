@@ -70,7 +70,14 @@ void redirection(int type, char *path)
 	    dup2(fd, STDOUT_FILENO);
 	    close(fd);
     }
-
+    else if(type==RED_ERR_OUT)
+    {
+	    dup2(1, 2);
+    }
+    else
+    {
+	    close(2);
+    }
 }
 
 token *traverseParenthesis(token *tok)
