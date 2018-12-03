@@ -3,7 +3,7 @@
 int debugPrint=0;
 int debugPrintChild=0;
 int debugPrintExitStatus=0;
-
+#define ERROREXIT(arg, status)  (perror(arg), exit(status))
 typedef struct redirections{
 int input;
 int output;
@@ -146,6 +146,7 @@ int process_stage(token *tok, int background)
 	token *origTok=tok;
 	int numArgs=0;
 	int status=0;
+	int fakeStatus=0;
 	while(tok[0].type==ARG){
 		numArgs++;
 		tok++;}
@@ -194,14 +195,21 @@ int process_stage(token *tok, int background)
 				redirection(tok[0].type, tok[0].text);
 				tok++;
 			}
-		    execvp(argArr[0], argArr);	
+		    //need shit here
+		    int i=execvp(argArr[0], argArr);
+		    ERROREXIT(argArr[0],i); 
 		}
 		else
 		{
 		    while(RED_OP(tok[0].type)){tok++;}
 		    if(background==0)
 		    {
-			    waitpid(pid, &status, 0);
+			    waitpid(pid, &fakeStatus, 0);
+			    status = STATUS(fakeStatus);
+			    if(debugPrintExitStatus)
+			    {
+				    printf("Stage just ended with status:%d , fake status: %d\n", status, fakeStatus);
+			    }
 		    }
 		    else
 		    {
@@ -235,18 +243,18 @@ int process_stage(token *tok, int background)
 		    }
 	    //incrementing it to get past left parenthesis
 		    tok++;
-		    exit(process(tok)%255);
+		    exit(process(tok));
 	    }
 	    else
 	    {	    
 		    while(RED_OP(tok[0].type)){tok++;}
 		    if(background==0)
 		    {
-			    waitpid(pid, &status, 0);
+			    waitpid(pid, &fakeStatus, 0);
+			    status=STATUS(fakeStatus);
 		    }
 		    else
 		    {
-
 			    fprintf(stderr, "Backgrounded: %d\n", pid);
 			    status=0;
 		    }
@@ -284,6 +292,7 @@ int process_pipeline(token *tok, int background)
     int pid;
     int fdin=-1;
     int status=0;
+    int fakeStatus=0;
     if(pipeExists(tok))
     {
 	    pipeExist=1;
@@ -312,7 +321,7 @@ int process_pipeline(token *tok, int background)
 			    close(fd[1]);
 		    }
 		    //this will turn into an exec call
-		    exit(process_stage(tok, background)%255);
+		    exit(process_stage(tok, background));
 	    }
 	    else
 	    {
@@ -320,7 +329,8 @@ int process_pipeline(token *tok, int background)
 		{
 			close(fdin);
 		}
-		waitpid(pid, &status, 0);
+		waitpid(pid, &fakeStatus, 0);
+		status=STATUS(fakeStatus);
 		if(debugPrintExitStatus)
 		{
 			printf("DONE PIPE WAIT\n");
@@ -352,14 +362,14 @@ int process_pipeline(token *tok, int background)
 	//IMPORTANT WHICH EXIT FUNCTION TO USE
 	if(debugPrintExitStatus)
 	{
-		printf("Exiting With Status: %d\n", temp);
+		printf("Exiting Wit Status: %d\n", temp);
 	}
-	temp=temp%255;
 	exit(temp);
     }
     else
     {
-	waitpid(pid, &status, 0);
+	waitpid(pid, &fakeStatus, 0);
+	status=STATUS(fakeStatus);
 	if(debugPrintExitStatus)
 	{
 		printf("Child process just ended with status: %d\n", status);
