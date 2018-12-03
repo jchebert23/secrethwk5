@@ -33,12 +33,44 @@ void local(char *s)
 //function to change file descriptors based on the redirection
 void redirection(int type, char *path)
 {
+    int fd;
     if(type==RED_IN)
     {
-	    int fd=open(path, O_RDONLY);
+	    fd=open(path, O_RDONLY);
 	    dup2(fd, STDIN_FILENO);
 	    close(fd);
     }
+    else if(type==RED_IN_HERE)
+    {
+	    char template[16]="tempInputXXXXXX";
+	    template[15]='\0';
+	    fd=mkstemp(template);
+	    size_t nbytes=strlen(path)*2;
+	    write(fd, path, nbytes);
+	    close(fd);
+	    fd=open(template, O_RDONLY);
+	    dup2(fd, STDIN_FILENO); 
+	    if(remove(template)!=0)
+	    {
+		    printf("%s not deleted successfully\n", template);
+	    } 
+	    close(fd);
+    }
+    else if(type==RED_OUT)
+    {
+	    //IMPORTANT PERMISSIONS ON OPENING FILE
+	    fd=open(path, O_WRONLY|O_CREAT, S_IWUSR|S_IRUSR);
+	    dup2(fd, STDOUT_FILENO);
+	    close(fd);
+    }
+    else if(type==RED_OUT_APP)
+    {
+	    //IMPORTANT PERMISSIONS ON OPENING FILE
+	    fd=open(path, O_WRONLY|O_APPEND|O_CREAT, S_IWUSR|S_IRUSR);
+	    dup2(fd, STDOUT_FILENO);
+	    close(fd);
+    }
+
 }
 
 token *traverseParenthesis(token *tok)
