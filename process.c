@@ -1,11 +1,40 @@
 #include "/c/cs323/Hwk5/process-stub.h"
 
-int debugPrint=0;
+int debugPrint=1;
 typedef struct output{
 int value;
 token *tok;
 }output;
 
+typedef struct redirections{
+int input;
+int output;
+}redirections;
+//function to break down local string, and set environment variable
+void local(char *s)
+{
+	//IMPORTANT, deal with case where $PATH=$PATH
+	char *equalsSign=strchr(s, '=');
+	int lengthOfFirstHalf=equalsSign-s;
+	char firstHalf[lengthOfFirstHalf+1];
+	memcpy(firstHalf, s, lengthOfFirstHalf);
+	if(debugPrint)
+	{
+	    printf("First half of local equality: %s\n", firstHalf);
+	    printf("Second half of local equality: %s\n", s+lengthOfFirstHalf+1);
+	}
+	setenv( firstHalf, s+lengthOfFirstHalf+1, 1);
+}
+
+//function to change file descriptors based on the redirection
+void redirection(int type, char *path)
+{
+    if(type==RED_IN)
+    {
+	    int fd=open(path, O_RDONLY);
+	    dup2(fd, STDIN_FILENO);
+    }
+}
 
 struct output process_pipeline(token *tok)
 {
@@ -38,11 +67,13 @@ struct output process_pipeline(token *tok)
 		//setting any locals
 		while(tok[0].type==LOCAL)
 		{
+			local(tok[0].text);
 			tok++;
 		}
 		//setting any redirections
 		while(RED_OP(tok[0].type))
 		{
+			redirection(tok[0].type, tok[0].text);
 			tok++;
 		}
 		pid_t pid;
@@ -60,11 +91,12 @@ struct output process_pipeline(token *tok)
 			{
 			    int status;
 			    waitpid(pid, &status, 0);
+			    close(STDIN_FILENO)
 			    out.value=status;
 			}
 		}
 		//if not we know that there has to be a subcommand
-		if(tok[0].type==PAR_LEFT)
+		else if(tok[0].type==PAR_LEFT)
 		{
 		    tok++;
 		    out.value=process(tok);
@@ -84,9 +116,14 @@ struct output process_pipeline(token *tok)
 		    //increment it one more time so we get past the right parenthesis
 		    tok++;
 		}
+		else
+		{
+			//IMPORTANT
+			printf("THIS IS BAD, CODE SHOULD NEVER REACH THIS POINT. NO ARGS AND NO LEFT PARENTHESIS\n");
+	
+		}
 		out.tok=tok;
 	}
-
 	return out;
 }
 
