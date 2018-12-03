@@ -4,10 +4,10 @@ ESTIMATE of time to complete assignment: 35
 DATE  START_TIME  TIME_SPENT  WORK_COMPLETED
 11/30/18  12:00   1           reading over spec, and walkthrough of assignment
 12/2/18   3:00    6           working on concatenating arguments into single string, got basic argument calling, and setting local environment vars down, working on subcommands           
-12/3/18   10:11   3           working on finishing up redirections, implementing pipes
+12/3/18   10:11   4           working on finishing up redirections, implementing pipes
 
 
-                  10:00 = TOTAL Time Spent
+                  11:00 = TOTAL Time Spent
 
 
 I have discussed my answers with:

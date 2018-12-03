@@ -2,10 +2,7 @@
 
 int debugPrint=0;
 int debugPrintChild=0;
-typedef struct output{
-int value;
-token *tok;
-}output;
+int debugPrintExitStatus=0;
 
 typedef struct redirections{
 int input;
@@ -101,6 +98,27 @@ token *traverseParenthesis(token *tok)
     }
 }
 
+token *traverseAndOr(token *tok)
+{
+    while(tok[0].type!=SEP_END && tok[0].type!=SEP_BG)
+    {
+	if(tok[0].type==PAR_LEFT)
+	{
+	    tok++;
+	    tok=traverseParenthesis(tok);
+	}
+	else if(tok[0].type==SEP_AND || tok[0].type==SEP_OR)
+	{
+	    return tok;
+	}
+	else
+	{
+	    tok++;
+	}
+    }
+    return 0;
+}
+
 token * pipeExists(token *tok)
 {
     while(tok[0].type!=SEP_AND && tok[0].type!=SEP_OR && tok[0].type!=SEP_END && tok[0].type!=SEP_BG)
@@ -123,11 +141,11 @@ token * pipeExists(token *tok)
     return 0;
 }
 
-struct output process_stage(token *tok, int background)
+int process_stage(token *tok, int background)
 {
-	struct output out;
 	token *origTok=tok;
 	int numArgs=0;
+	int status=0;
 	while(tok[0].type==ARG){
 		numArgs++;
 		tok++;}
@@ -181,17 +199,15 @@ struct output process_stage(token *tok, int background)
 		else
 		{
 		    while(RED_OP(tok[0].type)){tok++;}
-		    int status;
 		    if(background==0)
 		    {
 			    waitpid(pid, &status, 0);
-			    out.value=status;
 		    }
 		    else
 		    {
 			    //IMPORTANT HOW TO PRINT BACKGROUNDED
 			    fprintf(stderr, "Backgrounded: %d\n", pid);
-			    out.value=0;
+			    status=0;
 		    }
 		}
 		    
@@ -219,24 +235,20 @@ struct output process_stage(token *tok, int background)
 		    }
 	    //incrementing it to get past left parenthesis
 		    tok++;
-		    process(tok);
-		    exit(0);
+		    exit(process(tok)%255);
 	    }
 	    else
 	    {	    
 		    while(RED_OP(tok[0].type)){tok++;}
-
-		    int status;
 		    if(background==0)
 		    {
 			    waitpid(pid, &status, 0);
-			    out.value=status;
 		    }
 		    else
 		    {
 
 			    fprintf(stderr, "Backgrounded: %d\n", pid);
-			    out.value=0;
+			    status=0;
 		    }
 		    if(tok[0].type!=PAR_LEFT)
 		    {
@@ -261,8 +273,7 @@ struct output process_stage(token *tok, int background)
 		    tok++;
 		    }
 	}
-	out.tok=tok;
-	return out;
+	return status;
 }
 
 int process_pipeline(token *tok, int background)
@@ -272,7 +283,7 @@ int process_pipeline(token *tok, int background)
     int fd[2];
     int pid;
     int fdin=-1;
-    int status;
+    int status=0;
     if(pipeExists(tok))
     {
 	    pipeExist=1;
@@ -301,8 +312,7 @@ int process_pipeline(token *tok, int background)
 			    close(fd[1]);
 		    }
 		    //this will turn into an exec call
-		    process_stage(tok, background);
-		    exit(0);
+		    exit(process_stage(tok, background)%255);
 	    }
 	    else
 	    {
@@ -311,6 +321,10 @@ int process_pipeline(token *tok, int background)
 			close(fdin);
 		}
 		waitpid(pid, &status, 0);
+		if(debugPrintExitStatus)
+		{
+			printf("DONE PIPE WAIT\n");
+		}
 		tok=pipeExists(tok);
 		fdin=fd[0];
 		close(fd[1]);
@@ -334,12 +348,22 @@ int process_pipeline(token *tok, int background)
 	    close(fdin);
 	}
 	//this will turn into an exec call
-	process_stage(tok, background);
-	exit(0);
+	int temp= process_stage(tok, background);
+	//IMPORTANT WHICH EXIT FUNCTION TO USE
+	if(debugPrintExitStatus)
+	{
+		printf("Exiting With Status: %d\n", temp);
+	}
+	temp=temp%255;
+	exit(temp);
     }
     else
     {
 	waitpid(pid, &status, 0);
+	if(debugPrintExitStatus)
+	{
+		printf("Child process just ended with status: %d\n", status);
+	}
 	if(fdin >=0)
 	{
 		close(fdin);
@@ -351,8 +375,42 @@ int process_pipeline(token *tok, int background)
 
 int process_and_or(token *tok, int background)
 {
-	process_pipeline(tok, background);
-	return 0;
+
+	int first=1;
+	int and=0;
+	int or=0;
+	int status=0;
+	while(1)
+	{
+	    and=0;
+	    or=0;
+	    if(tok[0].type==SEP_AND)
+	    {
+		    and=1;
+	    }
+	    else
+	    {
+		    or=1;
+	    }
+	    if(!first)
+	    {
+	    tok++;
+	    }
+	    if((or && (status!=0)) || (and && (status==0)) || first)
+	    {
+		    status=process_pipeline(tok, background);
+	    }
+	    if(first){first=0;}
+	    if(traverseAndOr(tok))
+	    {
+		    tok=traverseAndOr(tok);
+	    }
+	    else
+	    {
+		    break;
+	    }
+	}
+	return status;
 }
 
 int process_list(token *tok)
