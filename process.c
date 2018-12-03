@@ -141,12 +141,10 @@ token * pipeExists(token *tok)
     return 0;
 }
 
-int process_stage(token *tok, int background)
+void process_stage(token *tok)
 {
 	token *origTok=tok;
 	int numArgs=0;
-	int status=0;
-	int fakeStatus=0;
 	while(tok[0].type==ARG){
 		numArgs++;
 		tok++;}
@@ -158,79 +156,30 @@ int process_stage(token *tok, int background)
 	    tok++;
 	    i++;
 	}
-	//printing out argument list
-	if(debugPrint)
-	{
-		printf("Args: ");
-		for(int x=0; x<numArgs; x++)
-		{
-			printf("%s ", argArr[x]);
-		}
-		printf("\n");
-	}
 	//setting any locals
 	while(tok[0].type==LOCAL)
 	{
 		local(tok[0].text);
 		tok++;
 	}
-	//setting any redirections
-	pid_t pid;
 	//if their were any arguments
 	if(numArgs!=0)
 	{
 		//have to add terminating 0 to list of arguments
-		argArr[numArgs]=0;
-		pid=fork();
-		if(pid==0)
+		argArr[numArgs]=0;	
+		while(RED_OP(tok[0].type))
 		{
-			
-		    if(debugPrintChild)
-		    {
-			    printf("In child process: %d\n", getpid());
-		    }
-		    
-			while(RED_OP(tok[0].type))
-			{
-				redirection(tok[0].type, tok[0].text);
-				tok++;
-			}
-		    //need shit here
-		    int i=execvp(argArr[0], argArr);
-		    ERROREXIT(argArr[0],i); 
+		    redirection(tok[0].type, tok[0].text);
+		    tok++;
 		}
-		else
-		{
-		    while(RED_OP(tok[0].type)){tok++;}
-		    if(background==0)
-		    {
-			    waitpid(pid, &fakeStatus, 0);
-			    status = STATUS(fakeStatus);
-			    if(debugPrintExitStatus)
-			    {
-				    printf("Stage just ended with status:%d , fake status: %d\n", status, fakeStatus);
-			    }
-		    }
-		    else
-		    {
-			    //IMPORTANT HOW TO PRINT BACKGROUNDED
-			    fprintf(stderr, "Backgrounded: %d\n", pid);
-			    status=0;
-		    }
-		}
+		//need shit here
+		int i=execvp(argArr[0], argArr);
+		ERROREXIT(argArr[0],i); 
 		    
 	}
 	//if not we know that there has to be a subcommand
 	else
 	{
-	    
-	    pid=fork();
-	    if(pid==0)
-	    {
-		    if(debugPrintChild)
-		    {
-			    printf("In child process: %d\n", getpid());
-		    }
 		    while(RED_OP(tok[0].type))
 		    {
 			redirection(tok[0].type, tok[0].text);
@@ -243,48 +192,11 @@ int process_stage(token *tok, int background)
 		    }
 	    //incrementing it to get past left parenthesis
 		    tok++;
-		    exit(process(tok));
-	    }
-	    else
-	    {	    
-		    while(RED_OP(tok[0].type)){tok++;}
-		    if(background==0)
-		    {
-			    waitpid(pid, &fakeStatus, 0);
-			    status=STATUS(fakeStatus);
-		    }
-		    else
-		    {
-			    fprintf(stderr, "Backgrounded: %d\n", pid);
-			    status=0;
-		    }
-		    if(tok[0].type!=PAR_LEFT)
-		    {
-			printf("CODE SHOULD NOT BE HERE, ERROR IN LOGIC\n");
-			exit(0);
-		    }
-	    //incrementing it to get past left parenthesis
-		    tok++;
-		    while(tok[0].type!=PAR_RIGHT)
-		    {
-			if(tok[0].type==PAR_LEFT)
-			{
-			tok++;
-			tok=traverseParenthesis(tok);
-			}
-			else
-			{
-			tok++;
-			}
-		    }
-		    //increment it one more time so we get past the right parenthesis
-		    tok++;
-		    }
+		    process(tok);
 	}
-	return status;
 }
 
-int process_pipeline(token *tok, int background)
+int process_pipeline(token *tok)
 {
 
     int pipeExist=0;
@@ -321,7 +233,7 @@ int process_pipeline(token *tok, int background)
 			    close(fd[1]);
 		    }
 		    //this will turn into an exec call
-		    exit(process_stage(tok, background));
+		    process_stage(tok);
 	    }
 	    else
 	    {
@@ -358,13 +270,7 @@ int process_pipeline(token *tok, int background)
 	    close(fdin);
 	}
 	//this will turn into an exec call
-	int temp= process_stage(tok, background);
-	//IMPORTANT WHICH EXIT FUNCTION TO USE
-	if(debugPrintExitStatus)
-	{
-		printf("Exiting Wit Status: %d\n", temp);
-	}
-	exit(temp);
+	process_stage(tok);
     }
     else
     {
@@ -408,7 +314,7 @@ int process_and_or(token *tok, int background)
 	    }
 	    if((or && (status!=0)) || (and && (status==0)) || first)
 	    {
-		    status=process_pipeline(tok, background);
+		    status=process_pipeline(tok);
 	    }
 	    if(first){first=0;}
 	    if(traverseAndOr(tok))
