@@ -1,6 +1,7 @@
 #include "/c/cs323/Hwk5/process-stub.h"
 
-int debugPrint=1;
+int debugPrint=0;
+int debugPrintChild=0;
 typedef struct output{
 int value;
 token *tok;
@@ -10,6 +11,9 @@ typedef struct redirections{
 int input;
 int output;
 }redirections;
+
+int process(token *tok);
+
 //function to break down local string, and set environment variable
 void local(char *s)
 {
@@ -33,13 +37,35 @@ void redirection(int type, char *path)
     {
 	    int fd=open(path, O_RDONLY);
 	    dup2(fd, STDIN_FILENO);
+	    close(fd);
     }
 }
 
-struct output process_pipeline(token *tok)
+token *traverseParenthesis(token *tok)
+{
+    while(1)
+    {
+	    if(tok[0].type==PAR_RIGHT)
+	    {
+		tok++;
+		return tok;
+	    }
+	    else if(tok[0].type==PAR_LEFT)
+	    {
+		tok++;
+		tok=traverseParenthesis(tok);
+	    }
+	    else
+	    {
+		tok++;
+	    }
+    }
+}
+
+struct output process_pipeline(token *tok, int background)
 {
 	struct output out;
-	while(tok[0].type==PIPE || tok[0].type==ARG)
+	while(!(tok[0].type==SEP_END || tok[0].type==SEP_BG || tok[0].type==SEP_AND || tok[0].type==SEP_OR || tok[0].type==PAR_RIGHT))
 	{
 		token *origTok=tok;
 		int numArgs=0;
@@ -71,11 +97,6 @@ struct output process_pipeline(token *tok)
 			tok++;
 		}
 		//setting any redirections
-		while(RED_OP(tok[0].type))
-		{
-			redirection(tok[0].type, tok[0].text);
-			tok++;
-		}
 		pid_t pid;
 		//if their were any arguments
 		if(numArgs!=0)
@@ -85,71 +106,147 @@ struct output process_pipeline(token *tok)
 			pid=fork();
 			if(pid==0)
 			{
+				
+			    if(debugPrintChild)
+			    {
+				    printf("In child process: %d\n", getpid());
+			    }
+			    
+				while(RED_OP(tok[0].type))
+				{
+					redirection(tok[0].type, tok[0].text);
+					tok++;
+				}
 			    execvp(argArr[0], argArr);	
 			}
 			else
 			{
+			    while(RED_OP(tok[0].type)){tok++;}
 			    int status;
-			    waitpid(pid, &status, 0);
-			    close(STDIN_FILENO)
-			    out.value=status;
+			    if(background==0)
+			    {
+				    waitpid(pid, &status, 0);
+				    out.value=status;
+			    }
+			    else
+			    {
+				    //IMPORTANT HOW TO PRINT BACKGROUNDED
+				    fprintf(stderr, "Backgrounded: %d\n", pid);
+				    out.value=0;
+			    }
 			}
+			    
 		}
 		//if not we know that there has to be a subcommand
-		else if(tok[0].type==PAR_LEFT)
-		{
-		    tok++;
-		    out.value=process(tok);
-		    int leftParen=0;
-		    while(!(tok[0].type==PAR_RIGHT  && leftParen==0))
-		    {
-			if(tok[0].type==PAR_LEFT)
-			{
-			leftParen++;
-			}
-			else if(tok[0].type==PAR_RIGHT)
-			{
-			leftParen--;
-			}
-			tok++;
-		    }
-		    //increment it one more time so we get past the right parenthesis
-		    tok++;
-		}
 		else
 		{
-			//IMPORTANT
-			printf("THIS IS BAD, CODE SHOULD NEVER REACH THIS POINT. NO ARGS AND NO LEFT PARENTHESIS\n");
-	
+		    
+		    pid=fork();
+		    if(pid==0)
+		    {
+			    if(debugPrintChild)
+			    {
+				    printf("In child process: %d\n", getpid());
+			    }
+			    while(RED_OP(tok[0].type))
+			    {
+				redirection(tok[0].type, tok[0].text);
+				tok++;
+			    }
+			    if(tok[0].type!=PAR_LEFT)
+			    {
+				printf("CODE SHOULD NOT BE HERE, ERROR IN LOGIC\n");
+				exit(0);
+			    }
+		    //incrementing it to get past left parenthesis
+			    tok++;
+			    process(tok);
+			    exit(0);
+		    }
+		    else
+		    {	    
+			    while(RED_OP(tok[0].type)){tok++;}
+
+			    int status;
+			    if(background==0)
+			    {
+				    waitpid(pid, &status, 0);
+				    out.value=status;
+			    }
+			    else
+			    {
+
+				    fprintf(stderr, "Backgrounded: %d\n", pid);
+				    out.value=0;
+			    }
+			    if(tok[0].type!=PAR_LEFT)
+			    {
+				printf("CODE SHOULD NOT BE HERE, ERROR IN LOGIC\n");
+				exit(0);
+			    }
+		    //incrementing it to get past left parenthesis
+			    tok++;
+			    while(tok[0].type!=PAR_RIGHT)
+			    {
+				if(tok[0].type==PAR_LEFT)
+				{
+				tok++;
+				tok=traverseParenthesis(tok);
+				}
+				else
+				{
+				tok++;
+				}
+			    }
+			    //increment it one more time so we get past the right parenthesis
+			    tok++;
+			    }
 		}
 		out.tok=tok;
 	}
 	return out;
 }
 
-int process_and_or(token *tok)
+int process_and_or(token *tok, int background)
 {
-process_pipeline(tok);
-return 0;
+	process_pipeline(tok, background);
+	return 0;
 }
 
 int process_list(token *tok)
 {
-process_and_or(tok);
-return 0;
+	int background=0;
+	token *origTok=tok;
+	while(tok[0].type!=SEP_END)
+	{
+		if(tok[0].type==PAR_LEFT)
+		{
+			tok++;
+			//if we find left paren, disregard all thats in between, until you find the right parenthesis
+			//traverse parenthesis returns spot after closing parenthesis
+			tok=traverseParenthesis(tok);
+		}
+		//if we find this seperator stuff is going to background
+		else if(tok[0].type==SEP_BG)
+		{
+			background=1;
+			break;
+		}
+		else
+		{
+		tok++;
+		}
+	}
+	tok=origTok;
+	if(debugPrintChild)
+	{
+		printf("Background: %d\n", background);
+	}
+	process_and_or(tok, background);
+	return 0;
 }
 
 int process(token *tok){
-    int status;
-
-    if(strcmp(tok[0].text, "wait")==0)
-    {
-	    int returnedVal;
-	    while((returnedVal=waitpid(-1, &status, WNOHANG))==0)
-	    {
-	    }
-    }
     process_list(tok);
     return 0;
-
 }
