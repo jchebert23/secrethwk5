@@ -269,7 +269,6 @@ int process_pipeline(token *tok)
 		{
 			close(fdin);
 		}
-		waitpid(pid, &fakeStatus, 0);
 		status=STATUS(fakeStatus);
 		if(debugPrintExitStatus)
 		{
@@ -302,7 +301,7 @@ int process_pipeline(token *tok)
     }
     else
     {
-	waitpid(pid, &fakeStatus, 0);
+	while((wait(&fakeStatus))>0);
 	status=STATUS(fakeStatus);
 	if(debugPrintExitStatus)
 	{
@@ -356,7 +355,6 @@ void process_and_or(token *tok)
 	}
 	exit(status);
 }
-
 int process_list(token *tok)
 {
 	int pid;
