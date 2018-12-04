@@ -98,6 +98,34 @@ token *traverseParenthesis(token *tok)
     }
 }
 
+token *traverseList(token *tok)
+{
+    if(tok==0)
+    {
+	    return 0;
+    }
+    while(1)
+    {
+	if(tok[0].type==NONE || tok[0].type==PAR_RIGHT)
+	{
+		return 0;
+	}
+	else if(tok[0].type==PAR_LEFT)
+	{
+		tok++;
+		tok=traverseParenthesis(tok);
+	}
+	else if(tok[0].type==SEP_END || tok[0].type==SEP_BG)
+	{
+		return tok;
+	}
+	else
+	{
+		tok++;
+	}
+    }
+}
+
 token *traverseAndOr(token *tok)
 {
     while(tok[0].type!=SEP_END && tok[0].type!=SEP_BG)
@@ -192,7 +220,7 @@ void process_stage(token *tok)
 		    }
 	    //incrementing it to get past left parenthesis
 		    tok++;
-		    process(tok);
+		    exit(process(tok));
 	}
 }
 
@@ -289,7 +317,7 @@ int process_pipeline(token *tok)
 }
 
 
-int process_and_or(token *tok, int background)
+void process_and_or(token *tok)
 {
 
 	int first=1;
@@ -326,43 +354,55 @@ int process_and_or(token *tok, int background)
 		    break;
 	    }
 	}
-	return status;
+	exit(status);
 }
 
 int process_list(token *tok)
 {
-	int background=0;
-	token *origTok=tok;
-	while(tok[0].type!=SEP_END)
+	int pid;
+	int status=0;
+	int fakeStatus;
+	while(1)
 	{
-		if(tok[0].type==PAR_LEFT)
+	    token *tempTok=traverseList(tok);
+	    if(tempTok==0)
+	    {
+		    break;
+	    }
+	    else if(tempTok[0].type==SEP_END)
+	    {
+		//IMPORTANT, fork error here    
+		pid=fork();
+		if(pid==0)
 		{
-			tok++;
-			//if we find left paren, disregard all thats in between, until you find the right parenthesis
-			//traverse parenthesis returns spot after closing parenthesis
-			tok=traverseParenthesis(tok);
-		}
-		//if we find this seperator stuff is going to background
-		else if(tok[0].type==SEP_BG)
-		{
-			background=1;
-			break;
+		    process_and_or(tok);
 		}
 		else
 		{
-		tok++;
+		    waitpid(pid, &fakeStatus,0);
+		    status=STATUS(fakeStatus);
 		}
+	     }
+	     else
+	     {
+		//IMPORTANT, fork error here
+		pid=fork();
+		if(pid==0)
+		{
+			process_and_or(tok);
+		}
+		else
+		{
+		    fprintf(stderr, "Backgrounded: %d\n", pid);
+		    status=0;
+		}
+	     }
+	     tok=traverseList(tok);
+	     tok++;
 	}
-	tok=origTok;
-	if(debugPrintChild)
-	{
-		printf("Background: %d\n", background);
-	}
-	process_and_or(tok, background);
-	return 0;
+	return status;
 }
 
 int process(token *tok){
-    process_list(tok);
-    return 0;
+    return process_list(tok);
 }
