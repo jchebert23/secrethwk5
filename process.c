@@ -4,10 +4,6 @@ int debugPrint=0;
 int debugPrintChild=0;
 int debugPrintExitStatus=0;
 #define ERROREXIT(arg, status)  (perror(arg), exit(status))
-typedef struct redirections{
-int input;
-int output;
-}redirections;
 
 int process(token *tok);
 
@@ -42,7 +38,7 @@ void redirection(int type, char *path)
 	    char template[16]="tempInputXXXXXX";
 	    template[15]='\0';
 	    fd=mkstemp(template);
-	    size_t nbytes=strlen(path)*2;
+	    size_t nbytes=strlen(path);
 	    write(fd, path, nbytes);
 	    close(fd);
 	    fd=open(template, O_RDONLY);
@@ -56,7 +52,7 @@ void redirection(int type, char *path)
     else if(type==RED_OUT)
     {
 	    //IMPORTANT PERMISSIONS ON OPENING FILE
-	    fd=open(path, O_WRONLY|O_CREAT, S_IWUSR|S_IRUSR);
+	    fd=open(path, O_WRONLY|O_CREAT|O_TRUNC, S_IWUSR|S_IRUSR);
 	    dup2(fd, STDOUT_FILENO);
 	    close(fd);
     }
@@ -402,5 +398,11 @@ int process_list(token *tok)
 }
 
 int process(token *tok){
+    int status;
+    int pid;
+    if((pid=waitpid((pid_t) -1, &status, WNOHANG))>0)
+    {
+	    fprintf(stderr, "Completed: %d (%d)\n", pid, status);
+    }
     return process_list(tok);
 }
