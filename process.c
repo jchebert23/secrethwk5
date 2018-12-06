@@ -265,7 +265,6 @@ int process_pipeline(token *tok)
 		{
 			close(fdin);
 		}
-		status=STATUS(fakeStatus);
 		if(debugPrintExitStatus)
 		{
 			printf("DONE PIPE WAIT\n");
@@ -298,6 +297,7 @@ int process_pipeline(token *tok)
     else
     {
 	while((wait(&fakeStatus))>0);
+	//waitpid(pid, &fakeStatus, 0);	
 	status=STATUS(fakeStatus);
 	if(debugPrintExitStatus)
 	{
@@ -312,13 +312,15 @@ int process_pipeline(token *tok)
 }
 
 
-void process_and_or(token *tok)
+int process_and_or(token *tok)
 {
 
 	int first=1;
 	int and=0;
 	int or=0;
 	int status=0;
+	int pid =0;
+	int fakeStatus;
 	while(1)
 	{
 	    and=0;
@@ -337,7 +339,20 @@ void process_and_or(token *tok)
 	    }
 	    if((or && (status!=0)) || (and && (status==0)) || first)
 	    {
-		    status=process_pipeline(tok);
+		    pid=fork();
+		    if(pid==0)
+		    {
+			    exit(process_pipeline(tok));
+		    }
+		    else
+		    {
+			    waitpid(pid,&fakeStatus,0);
+			    status=STATUS(fakeStatus);
+			    
+			char buff[30];
+			sprintf(buff,"%d", status);
+			setenv("?",buff , 1);
+		    }
 	    }
 	    if(first){first=0;}
 	    if(traverseAndOr(tok))
@@ -349,13 +364,12 @@ void process_and_or(token *tok)
 		    break;
 	    }
 	}
-	exit(status);
+	return status;
 }
 int process_list(token *tok)
 {
 	int pid;
 	int status=0;
-	int fakeStatus;
 	while(1)
 	{
 	    token *tempTok=traverseList(tok);
@@ -366,24 +380,15 @@ int process_list(token *tok)
 	    else if(tempTok[0].type==SEP_END)
 	    {
 		//IMPORTANT, fork error here    
-		pid=fork();
-		if(pid==0)
-		{
-		    process_and_or(tok);
-		}
-		else
-		{
-		    waitpid(pid, &fakeStatus,0);
-		    status=STATUS(fakeStatus);
-		}
-	     }
+		   status = process_and_or(tok);
+	    }
 	     else
 	     {
 		//IMPORTANT, fork error here
 		pid=fork();
 		if(pid==0)
 		{
-			process_and_or(tok);
+			exit(process_and_or(tok));
 		}
 		else
 		{
