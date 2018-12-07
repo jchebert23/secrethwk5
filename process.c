@@ -340,6 +340,103 @@ int process_pipeline(token *tok)
     return status;
 }
 
+int preformBuiltIn(token *tok)
+{ 
+    int status;
+    int pid;
+    char *firstArg=tok[0].text;
+    if(strcmp(firstArg, "wait")==0)
+    {
+	
+	    while((pid=waitpid((pid_t) -1, &status, WNOHANG))>=0)
+	    {
+		    if(pid>0)
+		    {
+		    fprintf(stderr, "Completed: %d (%d)\n", pid, status);
+		    }
+	    }
+
+    }
+    else
+    {
+	//IMPORTANT CHDIR ERROR
+	
+	token *origTok=tok;
+	int numArgs=0;
+	while(tok[0].type==ARG){
+		numArgs++;
+		tok++;}
+	char *argArr[numArgs+1];
+	tok=origTok;
+	int i=0;
+	while(tok[0].type==ARG){
+	    argArr[i]=tok[0].text;
+	    tok++;
+	    i++;
+	}
+	//setting any locals
+	while(tok[0].type==LOCAL)
+	{
+		local(tok[0].text);
+		tok++;
+	}
+	if(numArgs==1)
+	{
+		if(chdir(getenv("HOME"))<0)
+		{
+		    fprintf(stderr, "Could not change directory to HOME\n");
+		    return errno;
+		}
+	}
+	else if(numArgs==2)
+	{
+		//if the second argument is -p
+		if(strcmp(argArr[1], "-p")==0)
+		{
+		    char pathBuff[PATH_MAX];
+		    if(getcwd(pathBuff,PATH_MAX)==0)
+		    {
+			fprintf(stderr, "Could not get current working directory\n");
+			return errno;
+		    }
+		    else
+		    {
+			printf("%s\n", pathBuff);
+		    }
+		}
+		else
+		{
+			if(chdir(argArr[1])<0)
+			{
+				fprintf(stderr, "Could not change directory to %s\n", argArr[1]);
+				return errno;
+			}
+		}
+	}
+	else
+	{
+		//IMPORTANT WHETHER TO HAVE THIS EVEN IF NOT IN PARENT SHELL
+		fprintf(stderr, "too many arguments for change directory");
+	}
+    }
+    return 0;
+
+}
+
+int builtin(token *tok)
+{
+    char *firstArg=tok[0].text;
+    if(pipeExists(tok)==0)
+    {
+	if(strcmp(firstArg, "wait")==0 || strcmp(firstArg, "cd")==0)
+	{
+		return 1;
+	}
+    }
+    return 0;
+
+}
+
 
 int process_and_or(token *tok)
 {
@@ -367,21 +464,30 @@ int process_and_or(token *tok)
 	    tok++;
 	    }
 	    if((or && (status!=0)) || (and && (status==0)) || first)
-	    {
-		    pid=fork();
-		    if(pid==0)
+	    {	    
+		    char buff[30];
+		    if((builtin(tok))==0)
 		    {
-			    exit(process_pipeline(tok));
+			    pid=fork();
+			    if(pid==0)
+			    {
+				    exit(process_pipeline(tok));
+			    }
+			    else
+			    {
+				    waitpid(pid,&fakeStatus,0);
+				    status=STATUS(fakeStatus);
+				    
+			    }
 		    }
-		    else
-		    {
-			    waitpid(pid,&fakeStatus,0);
-			    status=STATUS(fakeStatus);
-			    
-			char buff[30];
-			sprintf(buff,"%d", status);
-			setenv("?",buff , 1);
+		    else{
+			    //preform builtin
+			    status=preformBuiltIn(tok);
+			    status=STATUS(status);
 		    }
+
+		    sprintf(buff,"%d", status);
+		    setenv("?",buff , 1);
 	    }
 	    if(first){first=0;}
 	    if(traverseAndOr(tok))
