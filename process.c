@@ -342,7 +342,7 @@ int process_pipeline(token *tok)
 
 int preformBuiltIn(token *tok)
 { 
-    int status;
+    int status=0;
     int pid;
     char *firstArg=tok[0].text;
     if(strcmp(firstArg, "wait")==0)
@@ -380,12 +380,20 @@ int preformBuiltIn(token *tok)
 		local(tok[0].text);
 		tok++;
 	}
+	int oldInput=dup(0);
+	int oldOutput=dup(1);
+	int oldError=dup(2);
+	while(RED_OP(tok[0].type))
+	{
+		redirection(tok[0].type, tok[0].text);
+		tok++;
+	}
 	if(numArgs==1)
 	{
 		if(chdir(getenv("HOME"))<0)
 		{
 		    fprintf(stderr, "Could not change directory to HOME\n");
-		    return errno;
+		    status=errno;
 		}
 	}
 	else if(numArgs==2)
@@ -397,29 +405,37 @@ int preformBuiltIn(token *tok)
 		    if(getcwd(pathBuff,PATH_MAX)==0)
 		    {
 			fprintf(stderr, "Could not get current working directory\n");
-			return errno;
+			status=errno;
 		    }
 		    else
 		    {
 			printf("%s\n", pathBuff);
 		    }
+		    fflush(stdout);
 		}
 		else
 		{
 			if(chdir(argArr[1])<0)
 			{
 				fprintf(stderr, "Could not change directory to %s\n", argArr[1]);
-				return errno;
+				status=errno;
 			}
 		}
 	}
 	else
 	{
 		//IMPORTANT WHETHER TO HAVE THIS EVEN IF NOT IN PARENT SHELL
-		fprintf(stderr, "too many arguments for change directory");
+		fprintf(stderr, "too many arguments for change directory\n");
 	}
+	//rerouting stderr,stdout,and stdin
+	dup2(oldInput, 0);
+	dup2(oldOutput,1);
+	dup2(oldError, 2);
+	close(oldInput);
+	close(oldOutput);
+	close(oldError);
     }
-    return 0;
+    return status;
 
 }
 
