@@ -485,7 +485,7 @@ int preformBuiltIn(token *tok)
 		    {
 			printf("%s\n", pathBuff);
 		    }
-		    fflush(stdout);
+		    //fflush(stdout);
 		}
 		else
 		{
@@ -502,7 +502,10 @@ int preformBuiltIn(token *tok)
 		fprintf(stderr, "too many arguments for change directory\n");
 		status=1;
 	}
-	//rerouting stderr,stdout,and stdin
+	//rerouting stderr,stdout,and stdin	
+	fflush(stdout);
+	fflush(stdin);
+	fflush(stderr);
 	dup2(oldInput, 0);
 	dup2(oldOutput,1);
 	dup2(oldError, 2);
@@ -510,6 +513,10 @@ int preformBuiltIn(token *tok)
 	close(oldOutput);
 	close(oldError);
     }
+
+fflush(stdout);
+fflush(stdin);
+fflush(stderr);
     return status;
 
 }
