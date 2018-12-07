@@ -24,44 +24,76 @@ void local(char *s)
 }
 
 //function to change file descriptors based on the redirection
-void redirection(int type, char *path)
+int redirection(int type, char *path)
 {
     int fd;
     if(type==RED_IN)
     {
 	    fd=open(path, O_RDONLY);
+	    if(fd>=0)
+	    {
 	    dup2(fd, STDIN_FILENO);
 	    close(fd);
+	    }
+	    else
+	    {
+	    fprintf(stderr, "COULD NOT OPEN INPUT FILE: %s\n", path);
+	    return 0;
+	    }
+
     }
     else if(type==RED_IN_HERE)
     {
 	    char template[16]="tempInputXXXXXX";
 	    template[15]='\0';
 	    fd=mkstemp(template);
+	    if(fd<0)
+	    {
+	    fprintf(stderr, "could not open input file\n");
+	    return 0;
+	    }
 	    size_t nbytes=strlen(path);
 	    write(fd, path, nbytes);
 	    close(fd);
 	    fd=open(template, O_RDONLY);
 	    dup2(fd, STDIN_FILENO); 
-	    if(remove(template)!=0)
-	    {
-		    printf("%s not deleted successfully\n", template);
-	    } 
+	    
+	    //if(remove(template)!=0)
+	    //{
+		//    printf("%s not deleted successfully\n", template);
+	    //} 
 	    close(fd);
     }
     else if(type==RED_OUT)
     {
 	    //IMPORTANT PERMISSIONS ON OPENING FILE
 	    fd=open(path, O_WRONLY|O_CREAT|O_TRUNC, S_IWUSR|S_IRUSR);
+	    if(fd>=0)
+	    {
 	    dup2(fd, STDOUT_FILENO);
 	    close(fd);
+	    }
+	    else
+	    {
+	    fprintf(stderr, "COULD NOT OPEN INPUT FILE: %s\n", path);
+	    return 0;
+	    }
     }
     else if(type==RED_OUT_APP)
     {
 	    //IMPORTANT PERMISSIONS ON OPENING FILE
 	    fd=open(path, O_WRONLY|O_APPEND|O_CREAT, S_IWUSR|S_IRUSR);
+	    if(fd>=0)
+	    {
 	    dup2(fd, STDOUT_FILENO);
 	    close(fd);
+	    }
+	    else
+	    {
+
+	    fprintf(stderr, "COULD NOT OPEN OUTPUT FILE: %s\n", path);
+	    return 0;
+	    }
     }
     else if(type==RED_ERR_OUT)
     {
@@ -71,6 +103,7 @@ void redirection(int type, char *path)
     {
 	    close(2);
     }
+    return 1;
 }
 
 token *traverseParenthesis(token *tok)
@@ -193,7 +226,10 @@ void process_stage(token *tok)
 		argArr[numArgs]=0;	
 		while(RED_OP(tok[0].type))
 		{
-		    redirection(tok[0].type, tok[0].text);
+		    if(redirection(tok[0].type, tok[0].text)==0)
+		    {
+			    exit(errno);
+		    }
 		    tok++;
 		}
 		//need shit here
@@ -206,7 +242,10 @@ void process_stage(token *tok)
 	{
 		    while(RED_OP(tok[0].type))
 		    {
-			redirection(tok[0].type, tok[0].text);
+			if(redirection(tok[0].type, tok[0].text)==0)
+			{
+				exit(errno);
+			}
 			tok++;
 		    }
 		    if(tok[0].type!=PAR_LEFT)
@@ -385,7 +424,11 @@ int preformBuiltIn(token *tok)
 	int oldError=dup(2);
 	while(RED_OP(tok[0].type))
 	{
-		redirection(tok[0].type, tok[0].text);
+		if(redirection(tok[0].type, tok[0].text)==0)
+		{
+			status=errno;
+			numArgs=-1;
+		}
 		tok++;
 	}
 	if(numArgs==1)
@@ -422,7 +465,7 @@ int preformBuiltIn(token *tok)
 			}
 		}
 	}
-	else
+	else if(numArgs>2)
 	{
 		//IMPORTANT WHETHER TO HAVE THIS EVEN IF NOT IN PARENT SHELL
 		fprintf(stderr, "too many arguments for change directory\n");
