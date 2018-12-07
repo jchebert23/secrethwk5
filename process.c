@@ -259,11 +259,6 @@ void process_stage(token *tok)
 			}
 			tok++;
 		    }
-		    if(tok[0].type!=PAR_LEFT)
-		    {
-			printf("CODE SHOULD NOT BE HERE, ERROR IN LOGIC\n");
-			exit(0);
-		    }
 	    //incrementing it to get past left parenthesis
 		    tok++;
 		    exit(process(tok));
@@ -313,7 +308,8 @@ int process_pipeline(token *tok)
 	    //IMPORTANT, ERRORS FOR IF PIPE FAILS
 	    if(pipe(fd) || (pid=fork()) < 0)
 	    {
-		    printf("Pipe or fork doesn't work\n");
+		    fprintf(stderr, "Pipe or fork doesn't work\n");
+		    return errno;
 	    }
 	    else if(pid==0)
 	    {
@@ -360,7 +356,8 @@ int process_pipeline(token *tok)
     //IMPORTANT ERROR ON THIS FORK
     if((pid = fork())<0)
     {
-	    printf("Fork does not work on last fork\n");
+	    fprintf(stderr, "fork fails\n");
+	    return errno;
     }
     else if(pid==0)
     {
@@ -502,10 +499,11 @@ int preformBuiltIn(token *tok)
 		fprintf(stderr, "too many arguments for change directory\n");
 		status=1;
 	}
-	//rerouting stderr,stdout,and stdin	
-	fflush(stdout);
-	fflush(stdin);
-	fflush(stderr);
+	//rerouting stderr,stdout,and stdin
+	
+fflush(stdout);
+fflush(stdin);
+fflush(stderr);
 	dup2(oldInput, 0);
 	dup2(oldOutput,1);
 	dup2(oldError, 2);
@@ -569,7 +567,12 @@ int process_and_or(token *tok)
 		    if(pipeExists(tok)!=0 ||(builtin(tok))==0)
 		    {
 			    pid=fork();
-			    if(pid==0)
+			    if(pid<0)
+			    {
+				    fprintf(stderr, "Fork failed\n");
+				    status=errno;
+			    }
+			    else if(pid==0)
 			    {
 				    exit(process_pipeline(tok));
 			    }
@@ -624,7 +627,12 @@ int process_list(token *tok)
 	     {
 		//IMPORTANT, fork error here
 		pid=fork();
-		if(pid==0)
+		if(pid<0)
+		{
+		    fprintf(stderr, "failed fork\n");
+		    status=errno;
+		}
+		else if(pid==0)
 		{
 			exit(process_and_or(tok));
 		}
