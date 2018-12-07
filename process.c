@@ -9,6 +9,8 @@ int debugPrintExitStatus=0;
 
 int process(token *tok);
 
+int preformBuiltIn(token *tok);
+int builtin(token *tok);
 //function to break down local string, and set environment variable
 void local(char *s)
 {
@@ -225,6 +227,12 @@ void process_stage(token *tok)
 	if(numArgs!=0)
 	{
 		//have to add terminating 0 to list of arguments
+		if(builtin(origTok))
+		{
+		    exit(preformBuiltIn(origTok));
+		}
+		else
+		{
 		argArr[numArgs]=0;	
 		while(RED_OP(tok[0].type))
 		{
@@ -237,6 +245,7 @@ void process_stage(token *tok)
 		//need shit here
 		execvp(argArr[0], argArr);
 		error("execvp did not finish"); 
+		}
 		    
 	}
 	//if not we know that there has to be a subcommand
@@ -388,13 +397,30 @@ int preformBuiltIn(token *tok)
     char *firstArg=tok[0].text;
     if(strcmp(firstArg, "wait")==0)
     {
-	
+	    int numArgs=0;
+	    while(tok[0].type==ARG){
+		numArgs++;
+		tok++;
+	    }
+	    while(tok[0].type==LOCAL)
+	    {
+		local(tok[0].text);
+		tok++;
+	    }
+	    if(numArgs>1)
+	    {
+		    status=1;
+		    fprintf(stderr, "Improper arguments for wait\n");
+	    }
+	    else
+	    {
 	    while((pid=waitpid((pid_t) -1, &status, WNOHANG))>=0)
 	    {
 		    if(pid>0)
 		    {
 		    fprintf(stderr, "Completed: %d (%d)\n", pid, status);
 		    }
+	    }
 	    }
 
     }
@@ -471,6 +497,7 @@ int preformBuiltIn(token *tok)
 	{
 		//IMPORTANT WHETHER TO HAVE THIS EVEN IF NOT IN PARENT SHELL
 		fprintf(stderr, "too many arguments for change directory\n");
+		status=1;
 	}
 	//rerouting stderr,stdout,and stdin
 	dup2(oldInput, 0);
