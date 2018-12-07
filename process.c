@@ -5,6 +5,8 @@ int debugPrintChild=0;
 int debugPrintExitStatus=0;
 #define ERROREXIT(arg, status)  (perror(arg), exit(status))
 
+#define error(reason) perror(reason), exit(errno)
+
 int process(token *tok);
 
 //function to break down local string, and set environment variable
@@ -233,8 +235,8 @@ void process_stage(token *tok)
 		    tok++;
 		}
 		//need shit here
-		int i=execvp(argArr[0], argArr);
-		ERROREXIT(argArr[0],i); 
+		execvp(argArr[0], argArr);
+		error("execvp did not finish"); 
 		    
 	}
 	//if not we know that there has to be a subcommand
@@ -485,12 +487,14 @@ int preformBuiltIn(token *tok)
 int builtin(token *tok)
 {
     char *firstArg=tok[0].text;
-    if(pipeExists(tok)==0)
+    if(firstArg)
     {
+    
 	if(strcmp(firstArg, "wait")==0 || strcmp(firstArg, "cd")==0)
 	{
 		return 1;
 	}
+    
     }
     return 0;
 
@@ -525,7 +529,7 @@ int process_and_or(token *tok)
 	    if((or && (status!=0)) || (and && (status==0)) || first)
 	    {	    
 		    char buff[30];
-		    if((builtin(tok))==0)
+		    if(pipeExists(tok)!=0 ||(builtin(tok))==0)
 		    {
 			    pid=fork();
 			    if(pid==0)
