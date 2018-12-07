@@ -220,6 +220,29 @@ void process_stage(token *tok)
 	}
 }
 
+
+int getStatusFromPipeline(int *arr, int length)
+{
+    
+	int actual;
+	actual=0;
+	int fakeStatus;
+	for(int i=0; i<=length; i++)
+	{
+		waitpid(arr[i], &fakeStatus, 0);
+		if(STATUS(fakeStatus)!=0)
+		{
+			actual=STATUS(fakeStatus);
+		}
+		else
+		{
+			actual=actual;
+		}
+	}
+	free(arr);
+	return actual;
+}
+
 int process_pipeline(token *tok)
 {
 
@@ -228,7 +251,9 @@ int process_pipeline(token *tok)
     int pid;
     int fdin=-1;
     int status=0;
-    int fakeStatus=0;
+    int *pidArr=malloc(sizeof(int));
+    int index=0;
+    //int fakeStatus;
     if(pipeExists(tok))
     {
 	    pipeExist=1;
@@ -261,6 +286,9 @@ int process_pipeline(token *tok)
 	    }
 	    else
 	    {
+		pidArr[index]=pid;
+		index++;
+		pidArr=realloc(pidArr, sizeof(int)*(index+1));
 		if(fdin>=0)
 		{
 			close(fdin);
@@ -296,9 +324,10 @@ int process_pipeline(token *tok)
     }
     else
     {
-	while((wait(&fakeStatus))>0);
-	//waitpid(pid, &fakeStatus, 0);	
-	status=STATUS(fakeStatus);
+	pidArr[index]=pid;
+	status=getStatusFromPipeline(pidArr, index);
+	//while((wait(&fakeStatus))>0);	
+	//status = STATUS(fakeStatus);
 	if(debugPrintExitStatus)
 	{
 		printf("Child process just ended with status: %d\n", status);
