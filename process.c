@@ -542,7 +542,6 @@ int process_and_or(token *tok)
 		    else{
 			    //preform builtin
 			    status=preformBuiltIn(tok);
-			    status=STATUS(status);
 		    }
 
 		    sprintf(buff,"%d", status);
@@ -587,7 +586,9 @@ int process_list(token *tok)
 		else
 		{
 		    fprintf(stderr, "Backgrounded: %d\n", pid);
-		    status=0;
+		    char buff[5];
+		    sprintf(buff, "%d", 0);
+		    setenv("?", buff, 1);
 		}
 	     }
 	     tok=traverseList(tok);
