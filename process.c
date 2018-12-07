@@ -374,8 +374,10 @@ int process_pipeline(token *tok)
     }
     else
     {
+	signal(SIGINT, SIG_IGN);
 	pidArr[index]=pid;
 	status=getStatusFromPipeline(pidArr, index);
+	signal(SIGINT, SIG_DFL);
 	//while((wait(&fakeStatus))>0);	
 	//status = STATUS(fakeStatus);
 	if(debugPrintExitStatus)
@@ -418,9 +420,10 @@ int preformBuiltIn(token *tok)
 	    {
 		    if(pid>0)
 		    {
-		    fprintf(stderr, "Completed: %d (%d)\n", pid, status);
+		    fprintf(stderr, "Completed: %d (%d)\n", pid, STATUS(status));
 		    }
 	    }
+	    status=0;
 	    }
 
     }
@@ -565,14 +568,18 @@ int process_and_or(token *tok)
 			    }
 			    else
 			    {
+				    signal(SIGINT, SIG_IGN);
 				    waitpid(pid,&fakeStatus,0);
 				    status=STATUS(fakeStatus);
+				    signal(SIGINT, SIG_DFL);
 				    
 			    }
 		    }
 		    else{
 			    //preform builtin
+			    signal(SIGINT, SIG_IGN);
 			    status=preformBuiltIn(tok);
+			    signal(SIGINT, SIG_DFL);
 		    }
 
 		    sprintf(buff,"%d", status);
@@ -633,7 +640,7 @@ int process(token *tok){
     int pid;
     if((pid=waitpid((pid_t) -1, &status, WNOHANG))>0)
     {
-	    fprintf(stderr, "Completed: %d (%d)\n", pid, status);
+	    fprintf(stderr, "Completed: %d (%d)\n", pid,STATUS(status));
     }
     return process_list(tok);
 }
